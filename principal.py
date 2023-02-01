@@ -30,7 +30,7 @@ except:
 # VARIABLES
 ###########################################################################################################################################################
 
-
+DEFAULT_IP = '127.0.0.1'
 VREP_PORT = 19997
 UPDATE_PERIOD = 100
 
@@ -51,6 +51,57 @@ coef_bc = 10    # Consommation a vide
 ###########################################################################################################################################################
 # FONCTIONS
 ###########################################################################################################################################################
+
+def InitAllHandles():
+    global iBaseHandle, iLeftMotor, iRightMotor
+    #..........................................
+    # recuperation du handle sur la base mobile 
+    #..........................................
+    siErrorCode, iBaseHandle = vrep.simxGetObjectHandle(siID, MOBILE_BASE, vrep.simx_opmode_blocking)
+    if( siErrorCode != vrep.simx_error_noerror ):
+        print('ERREUR : main() ---> apppel a simxGetObjectHandle()\n')
+        print('         code de retour V-REP = ' + str(siErrorCode))
+        vrep.simxFinish(siID)
+        return(-1)
+    print("handle sur la base mobile : OK = " + str(iBaseHandle) )
+    #............................................
+    # recuperation du handle sur le moteur gauche 
+    #............................................
+    siErrorCode, iLeftMotor = vrep.simxGetObjectHandle(siID, LEFT_MOTOR, vrep.simx_opmode_blocking)
+    if( siErrorCode != vrep.simx_error_noerror ):
+        print('ERREUR : main() ---> apppel a simxGetObjectHandle()\n')
+        print('         code de retour V-REP = ' + str(siErrorCode))
+        vrep.simxFinish(siID)
+        return(-2)
+    print("handle sur le moteur gauche : OK = " + str(iLeftMotor) )
+    #............................................
+    # recuperation du handle sur le moteur droit 
+    #............................................
+    siErrorCode, iRightMotor = vrep.simxGetObjectHandle(siID, RIGHT_MOTOR, vrep.simx_opmode_blocking)
+    if( siErrorCode != vrep.simx_error_noerror ):
+        print('ERREUR : main() ---> apppel a simxGetObjectHandle()\n')
+        print('         code de retour V-REP = ' + str(siErrorCode))
+        vrep.simxFinish(siID)
+        return(-3)
+    print("handle sur le moteur droit : OK = " + str(iRightMotor) )
+    return(0)
+
+def Set_Immobile():
+    '''
+    Immobilisation du Robot au départ de la simu. 
+    '''
+    siError = vrep.simxSetJointTargetVelocity(siID, iLeftMotor, 0.0, vrep.simx_opmode_blocking)
+    if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
+        print('Turn() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
+        print('code d erreur V-REP = ' + str(siError))
+        return(-1)
+    siError = vrep.simxSetJointTargetVelocity(siID, iRightMotor, 0.0, vrep.simx_opmode_blocking)
+    if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
+        print('Turn() : ERREUR ---> appel a simxSetJointTargetVelocity() [droite]')
+        print('code d erreur V-REP = ' +  str(siError))
+        return(-2)
+    print("Robot à l'arrêt !")
+
 
 def DEG2RAD(x):
     ''' deg --> rad '''
@@ -225,36 +276,38 @@ def ConstructGraph(cylindres, R=0.5):
     '''
     nbre_cyl = len(cylindres)
     g = ig.Graph(n=nbre_cyl, directed=True)
-    g.vs["num"] = [str(k) for k in range(len(cylindres))]
+    g.vs["num"] = [str(cyl[0]) for cyl in cylindres]
     g.vs["masse"] = [str(cyl[2]) for cyl in cylindres]
     g.vs["gain"] = [str(cyl[3]) for cyl in cylindres]
     poids = [] 
 
     for cyl1 in cylindres:
-        print(str(cyl1))
+        # print(str(cyl1))
         for cyl2 in cylindres:
             if cyl1 != cyl2:
-                print("\t-------- " + str(cyl2))
+                # print("\t-------- " + str(cyl2))
                 b = True
                 i = 0
                 while b and i < nbre_cyl:
                     cyl3 = cylindres[i]
-                    test_X = max(cyl1[1][0],cyl2[1][0]) - cyl3[1][0] > 0 and cyl3[1][0] - min(cyl1[1][0],cyl2[1][0]) > 0
-                    test_Y = max(cyl1[1][1],cyl2[1][1]) - cyl3[1][1] > 0 and cyl3[1][1] - min(cyl1[1][0],cyl2[1][1]) > 0
-                    if cyl3 != cyl1 and cyl3 != cyl2 and (test_X or test_Y) :
-                        print("\t\t-------- " + str(cyl3))
+                    test_X = (cyl1[1][0]<cyl2[1][0] and cyl1[1][0]<cyl3[1][0] and cyl3[1][0]<cyl2[1][0]) or (cyl1[1][0]>cyl2[1][0] and cyl1[1][0]>cyl3[1][0] and cyl3[1][0]>cyl2[1][0])
+                    test_Y = (cyl1[1][1]<cyl2[1][1] and cyl1[1][1]<cyl3[1][1] and cyl3[1][1]<cyl2[1][1]) or (cyl1[1][1]>cyl2[1][1] and cyl1[1][1]>cyl3[1][1] and cyl3[1][1]>cyl2[1][1])
+                    test_dist = distancePP(cyl1[1],cyl2[1]) > distancePP(cyl1[1],cyl3[1])
+                    # print("\t\t-------- " + str(cyl3) + " | " + str(test_X) + " " + str(test_Y) + " " + str(test_dist))
+                    if cyl3 != cyl1 and cyl3 != cyl2 and (test_X or test_Y) and test_dist:
                         dte = droite(cyl1[1],cyl2[1])
                         distance = distancePD(cyl3[1], dte)
-                        print("\t\t\t\tdroite : " + str(dte) + " | distance : " + str(distance))
-                        if distance < distancePP(cyl1[1],cyl2[1])/6:
+                        # print("\t\t\t\tdroite : " + str(dte) + " | distance : " + str(distance))
+                        if distance < distancePP(cyl1[1],cyl2[1])/4:
                             b = False
-                            print("\t\t\t\tedge NOK")
+                            # print("\t\t\t\tedge NOK")
                     i += 1
-                if b and i==nbre_cyl:
-                    g.add_edges([(cyl1[0],cyl2[0])])
-                    poids.append(Poids_i_vers_j(cyl1,cyl2,))
-                    print("\t\t\t\tedge OK")
-                    print("\t\t\t\tedge : " + str(g.get_edgelist()))
+                if b and i==nbre_cyl and ((cyl1[0],cyl2[0]) not in list(g.get_edgelist())) :
+                    g.add_edges([(cyl1[0],cyl2[0]),(cyl2[0],cyl1[0])])
+                    poids.append(Poids_i_vers_j(cyl1,cyl2))
+                    poids.append(Poids_i_vers_j(cyl2,cyl1))
+                    # print("\t\t\t\tedge OK")
+                    # print("\t\t\t\tedge : " + str(g.get_edgelist()))
                     # print("\t\t\t\tpoids : " + str(poids))
     g.es["weight"] = poids
     A = list(g.get_adjacency(attribute='weight', default=1e10))
@@ -282,6 +335,7 @@ def Afficher_Graphe(grph):
     plt.show()
 
 def shortest_path(adj_matrix):
+    ''' Retourne le chemin le plus court parcourant tout les noeuds du graphe '''
     # Helper function to calculate path length
     def path_len(path):
         return sum(adj_matrix[i][j] for i, j in zip(path, path[1:]))
@@ -291,8 +345,7 @@ def shortest_path(adj_matrix):
 
     # Current state {(node, visited_nodes): shortest_path}
     state = {(i, frozenset([0, i])): [0, i] for i in range(1, len(adj_matrix[0]))}
-    # print(state.items())
-    # print(len(adj_matrix))
+
     for k in range(len(adj_matrix) - 2):
         next_state = {}
         # print(len(state))
@@ -303,7 +356,6 @@ def shortest_path(adj_matrix):
             for node in to_visit - visited:
                 new_path = path + [node]
                 new_pos = (node, frozenset(new_path))
-
                 # Update if (current node, visited) is not in next state or we found shorter path
                 if new_pos not in next_state or path_len(new_path) < path_len(next_state[new_pos]):
                     next_state[new_pos] = new_path
@@ -315,27 +367,104 @@ def shortest_path(adj_matrix):
     print('path: {0}, length: {1}'.format(shortest, path_len(shortest)))
     return (shortest, path_len(shortest))
 
+def del_cyl(cylindres, n=5):
+    ''' Supprime les 5 cylindres les moins retables, ayants les rapports Masse/Gain les plus élevés. '''
+    rev = cylindres[::-1]
+    dlt = rev[n:]
+    return dlt[::-1]
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+###########################################################################################################################################################
+# INIT
+###########################################################################################################################################################
+'''
+#.........................................
+# tentative de connexion au serveur V-REP 
+#.........................................
+argc = len(sys.argv)
+if( argc == 1 ):
+    szServerAddr = DEFAULT_IP
+else:
+    szServerAddr = sys.argv[1]
+vrep.simxFinish(-1)
+time.sleep(0.1)
+siID = vrep.simxStart(szServerAddr, VREP_PORT, 1, 1, 10000, 50)
+if( siID < 0):
+  print('ERREUR : main() ---> appel a simxStart() : impossible de se connecter a ' +  sys.argv[1])
+  print('         valeur de retour = ' + str(siID))
+  exit()
+print("Connexion au serveur COPPELIA fonctionnant sur " + szServerAddr + "etablie...")
+
+#.........................................
+# Initialisation des Handles
+#.........................................
+if InitAllHandles() < 0:
+    print("ERREUR : main() ---> appel a InitAllHandles() : un des handles est indisponible")
+    vrep.simxFinish(siID)
+    exit()
+
+if Set_Immobile() < 0:
+    print("ERREUR : main() ---> appel a Set_Immobile() : Erreur pour un des moteurs")
+    vrep.simxFinish(siID)
+    exit()
+
+time.sleep(0.1)
+
+#.........................................
+# Initialisation de la camera
+#.........................................
+
+
+
+#.........................................
+# Récuperation des cylindres 
+#.........................................
+
+
+'''
+###########################################################################################################################################################
+# PROGRAMME
+###########################################################################################################################################################
 
 import random
-def Test_Cylindres(n=10):
+def Test_Cylindres(n=20):
+    ''' Les cylindres sont classé par rentabilités : rapport Masse/Gain '''
     cylindres = []
     for i in range(n):
-        x, y = round(random.randint(0,100)/10,1), round(random.randint(0,100)/10,1)
+        x, y = round(random.randint(0,100)/10,2), round(random.randint(0,100)/10,2)
         M = random.randint(25,100)
-        R = round(M*0.2*random.randint(5,10)*0.1,2)
+        R = round(M*0.2*random.randint(1,10)*0.1,2)
         cyl = [i, [x,y], M, R]
         cylindres.append(cyl)
+    cylindres = sorted(cylindres, key=lambda a: a[2]/a[3])
+    i = 0
+    for cyl in cylindres:
+        cyl[0] = i
+        i += 1
     return cylindres
 
 c = Test_Cylindres()
-# c = [[0, [7.7, 8.7], 98, 15.68], [1, [2.8, 5.4], 97, 13.58], [2, [5.3, 6.5], 63, 8.82], [3, [3.6, 1.1], 46, 5.52], [4, [5.4, 6.9], 97, 13.58]]
-graph, adj_matrix = ConstructGraph(c)
+# c = [[0, [7.7, 8.7], 98, 15.68], [1, [2.8, 5.4], 97, 13.58], [2, [5.3, 6.5], 63, 8.82], [3, [3.6, 1.1], 46, 5.52], [4, [5.4, 6.9], 75, 12]]
+# c = del_cyl(c)
+# print(c)
+
+graph, adj_matrix = ConstructGraph(c[:15])
 Plot_Cylindres(c, graph.get_edgelist())
 # print(adj_matrix)
-# path, length = shortest_path(adj_matrix)
-
+path, length = shortest_path(adj_matrix)
 print("Affichage en cours")
 Afficher_Graphe(graph)
 
@@ -345,86 +474,14 @@ Afficher_Graphe(graph)
 
 
 
-
-
-
 '''
-###########################################################################################################################################################
-# INIT
-###########################################################################################################################################################
-
-#.........................................
-# tentative de connexion au serveur V-REP 
-#.........................................
-vrep.simxFinish(-1)
-time.sleep(1)
-
-siID = vrep.simxStart('127.0.0.1', VREP_PORT, 1, 1, 10000, 50)
-
-if( siID < 0):
-  print('ERREUR : main() ---> appel a simxStart() : impossible de se connecter a ' +  sys.argv[1])
-  print('         valeur de retour = ' + str(siID))
-  exit()
-
-#..........................................
-# recuperation du handle sur la base mobile 
-#..........................................
-siErrorCode, iBaseHandle = vrep.simxGetObjectHandle(siID, MOBILE_BASE, vrep.simx_opmode_blocking)
-if( siErrorCode != vrep.simx_error_noerror ):
-  print('ERREUR : main() ---> apppel a simxGetObjectHandle()\n')
-  print('         code de retour V-REP = ' + str(siErrorCode))
-  vrep.simxFinish(siID)
-  exit()
-
-#............................................
-# recuperation du handle sur le moteur gauche 
-#............................................
-siErrorCode, iLeftMotor = vrep.simxGetObjectHandle(siID, LEFT_MOTOR, vrep.simx_opmode_blocking)
-if( siErrorCode != vrep.simx_error_noerror ):
-  print('ERREUR : main() ---> apppel a simxGetObjectHandle()\n')
-  print('         code de retour V-REP = ' + str(siErrorCode))
-  vrep.simxFinish(siID)
-  exit()
-
-#............................................
-# recuperation du handle sur le moteur droit 
-#............................................
-siErrorCode, iRightMotor = vrep.simxGetObjectHandle(siID, RIGHT_MOTOR, vrep.simx_opmode_blocking)
-if( siErrorCode != vrep.simx_error_noerror ):
-  print('ERREUR : main() ---> apppel a simxGetObjectHandle()\n')
-  print('         code de retour V-REP = ' + str(siErrorCode))
-  vrep.simxFinish(siID)
-  exit()
-
-#.........................................  
-# immobilisation du Robot  : 
-#.........................................
-siError = vrep.simxSetJointTargetVelocity(siID, iLeftMotor, 0.0, vrep.simx_opmode_blocking)
-if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
-  print('Turn() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
-  print('code d erreur V-REP = ' + str(siError))
-  exit()
-siError = vrep.simxSetJointTargetVelocity(siID, iRightMotor, 0.0, vrep.simx_opmode_blocking)
-if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
-  print('Turn() : ERREUR ---> appel a simxSetJointTargetVelocity() [droite]')
-  print('code d erreur V-REP = ' +  str(siError))
-  exit()
-
-print('Connecté à la simulation !')
-
-###########################################################################################################################################################
-# NAVIGATION
-###########################################################################################################################################################
-
-
-
-
-
 ###########################################################################################################################################################
 # DECONNECTION DU SERVEUR
 ###########################################################################################################################################################
 
 time.sleep(1)
+print("deconnexion du serveur COPPELIA...")
 vrep.simxFinish(siID)
+print("OK")
 
 '''

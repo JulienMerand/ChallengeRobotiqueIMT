@@ -33,27 +33,29 @@ except:
 DEFAULT_IP = '127.0.0.1'
 VREP_PORT = 19997
 UPDATE_PERIOD = 100
+siID = -1
 
 MON_PI = 3.141592654
 
-MOBILE_BASE = 'RoBo'
-LEFT_MOTOR = 'leftMotor'
-RIGHT_MOTOR = 'rightMotor'
+MOBILE_BASE = 'Robot'
+LEFT_MOTOR = 'LeftMotor'
+RIGHT_MOTOR = 'RightMotor'
+CAMERA = 'MainCamera'
 CORRECTION_COEFF = (1.25 * 36.0 / 30.0)       # ->facteur correctif pour assurer des deplacements en B.O a peu pres corrects...
 ENTRAXE = 0.2
 WHEEL_RADIUS = 0.1                                             
 
-Vmax0 = 20      # Vitesse max a vide
-coef_a = 10     # Pondaration Masse-Vitesse
-coef_ac = 10    # Pondaration Masse-Carburant
-coef_bc = 10    # Consommation a vide
+Vmax0 = 1           # Vitesse max a vide
+coef_a = 1/600      # Pondaration Masse-Vitesse
+coef_ac = 7.41e-5   # Pondaration Masse-Carburant
+coef_bc = 1/15      # Consommation a vide
 
 ###########################################################################################################################################################
 # FONCTIONS
 ###########################################################################################################################################################
 
 def InitAllHandles():
-    global iBaseHandle, iLeftMotor, iRightMotor
+    global iBaseHandle, iLeftMotor, iRightMotor #, iCamera
     #..........................................
     # recuperation du handle sur la base mobile 
     #..........................................
@@ -84,6 +86,16 @@ def InitAllHandles():
         vrep.simxFinish(siID)
         return(-3)
     print("handle sur le moteur droit : OK = " + str(iRightMotor) )
+    #............................................
+    # recuperation du handle sur la camera 
+    #............................................
+    # siErrorCode, iCamera = vrep.simxGetObjectHandle(siID, CAMERA, vrep.simx_opmode_blocking)
+    # if( siErrorCode != vrep.simx_error_noerror ):
+    #     print('ERREUR : main() ---> apppel a simxGetObjectHandle()\n')
+    #     print('         code de retour V-REP = ' + str(siErrorCode))
+    #     vrep.simxFinish(siID)
+    #     return(-4)
+    # print("handle sur le moteur droit : OK = " + str(iCamera) )
     return(0)
 
 def Set_Immobile():
@@ -101,125 +113,99 @@ def Set_Immobile():
         print('code d erreur V-REP = ' +  str(siError))
         return(-2)
     print("Robot à l'arrêt !")
-
-
-def DEG2RAD(x):
-    ''' deg --> rad '''
-    y = MON_PI * ( x / 180.0)
-    return( y )
-
-
-def Turn( dbAngle, dbVel):
-    '''
-    Ang = deg | Vel = deg/s 
-    Left : ANG > 0.0
-    Right : ANG < 0.0
-    '''
-    #......
-    # init 
-    #......
-    dbVelRad = DEG2RAD(math.fabs(dbVel))
-    w = (0.5 * dbVelRad * ENTRAXE)/WHEEL_RADIUS
-    dT = DEG2RAD(math.fabs(dbAngle)) / dbVelRad
-    iSleepTime = dT
-    if (dbAngle >= 0.0):
-        wR = w
-        wL = -w
-    else:
-        wR = -w
-        wL = w
-    #....................................*/
-    # Application des vitesses au moteur */
-    #....................................*/
-    siError = vrep.simxSetJointTargetVelocity(siID, iLeftMotor, wL, vrep.simx_opmode_blocking)
-    if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
-        print('Turn() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
-        print('code d erreur V-REP = ' + str(siError))
-        return(-1)
-
-    siError = vrep.simxSetJointTargetVelocity(siID, iRightMotor, wR, vrep.simx_opmode_blocking)
-    if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
-        print('Turn() : ERREUR ---> appel a simxSetJointTargetVelocity() [droite]')
-        print('code d erreur V-REP = ' +  str(siError))
-        return(-1)
-    #................................................................
-    # attente de la realisation du mouvement : on peut mieux faire ! 
-    #................................................................
-    iTotTime = 0;
-    while (iTotTime < iSleepTime ):
-        time.sleep(0.001 * UPDATE_PERIOD * CORRECTION_COEFF )
-        iTotTime = iTotTime + 0.001 * UPDATE_PERIOD
-    #...........................
-    # on pense a s'arreter... : 
-    #...........................
-    wL = 0.0
-    wR = 0.0
-    siError = vrep.simxSetJointTargetVelocity(siID, iLeftMotor, wL, vrep.simx_opmode_blocking)
-    if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
-        print('Turn() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
-        print('code d erreur V-REP = ' + str(siError))
-        return(-1)
-
-    siError = vrep.simxSetJointTargetVelocity(siID, iRightMotor, wR, vrep.simx_opmode_blocking)
-    if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
-        print('Turn() : ERREUR ---> appel a simxSetJointTargetVelocity() [droite]')
-        print('code d erreur V-REP = ' +  str(siError))
-        return(-1)
-    # OK
     return(0)
 
-
-def Go(dbDist, dbVel):
-    ''' 
-    Dist = m | Vel = m/s
-    Marche arrière : Dist < 0
-    '''
-    #......
-    # init 
-    #......
-    w = math.fabs(dbVel) / WHEEL_RADIUS
-    dT = math.fabs(dbDist / dbVel)
-    iSleepTime = dT
-    if (dbDist < 0.0):
-        w = -w       
-    #....................................*/
-    # Application des vitesses au moteur */
-    #....................................*/
-    siError = vrep.simxSetJointTargetVelocity(siID, iLeftMotor, w, vrep.simx_opmode_blocking)
-    if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
-        print('Go() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
-        print('code d erreur V-REP = ' + str(siError))
-        return(-1)
-
-    siError = vrep.simxSetJointTargetVelocity(siID, iRightMotor, w, vrep.simx_opmode_blocking)
-    if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
-        print('Go() : ERREUR ---> appel a simxSetJointTargetVelocity() [droite]')
-        print('code d erreur V-REP = ' +  str(siError))
-        return(-1)
-    #................................................................
-    # attente de la realisation du mouvement : on peut mieux faire ! 
-    #................................................................
-    iTotTime = 0;
-    while (iTotTime < iSleepTime ):
-        time.sleep(0.001 * UPDATE_PERIOD * CORRECTION_COEFF )
-        iTotTime = iTotTime + 0.001 * UPDATE_PERIOD
-    #...........................
-    # on pense a s'arreter... : 
-    #...........................
-    w = 0.0
-    siError = vrep.simxSetJointTargetVelocity(siID, iLeftMotor, w, vrep.simx_opmode_blocking)
-    if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
-        print('Go() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
-        print('code d erreur V-REP = ' + str(siError))
-        return(-1)
-
-    siError = vrep.simxSetJointTargetVelocity(siID, iRightMotor, w, vrep.simx_opmode_blocking)
-    if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
-        print('Go() : ERREUR ---> appel a simxSetJointTargetVelocity() [droite]')
-        print('code d erreur V-REP = ' +  str(siError))
-        return(-1)
+def GetMobileBasePosition():  
+    #............................
+    # recuperation de la position
+    #............................
+    siError, Pos =  vrep.simxGetObjectPosition(siID, iBaseHandle, -1 ,vrep.simx_opmode_blocking)
+    if (siError != vrep.simx_return_ok ):
+        print('GetMobileBasePosition() : ERREUR ---> appel a simxGetObjectPosition().\n')
+        print('code d erreur COPPELIA = ', str(siError) )
+        return -2,[],[]
+  #.............................
+  # recuperation de l'orientation
+  #..............................
+    siError, Ori =  vrep.simxGetObjectOrientation(siID, iBaseHandle, -1 ,vrep.simx_opmode_blocking)
+    if (siError != vrep.simx_return_ok ):
+        print('GetMobilePosition() : ERREUR ---> appel a simxGetObjectOrientation().\n')
+        print('code d erreur COPPELIA = ', str(siError) )
+        return -1,Pos,[]
+    Ori[2] += MON_PI
     # OK
-    return(0)
+    return(0,Pos,Ori[2])
+
+# def InitVisionSystem():
+#     siError, imgResolution, imgData = vrep.simxGetVisionSensorImage(siID, iCamera, 0, vrep.simx_opmode_streaming )
+#     if(siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag):
+#         print('InitVisionSystem() : ERREUR -->appel a simxGetVisionSensorImage()')
+#         print('                     code d erreur COPPELIA = ' + str(siError))
+#         return(-1)
+#     print("handle MainCamera = " + str( iCamera))
+#     return( 0 )
+
+def COP2CV2ImageWrapper( imgRes, imgData ):
+    imgShape = [imgRes[1],imgRes[0],3]
+    cvImg = np.zeros(imgShape, dtype = np.uint8 )
+    index = 0
+    for i in range(imgRes[1]):
+        for j in range(imgRes[0]):
+            # COPPELIA travaille en RGB, et OpenCV en BGR...
+            # il faut de plus inverser l'ordre des lignes
+            cvImg[imgRes[1] -1 - i,j,2] = imgData[index]
+            cvImg[imgRes[1] -1 - i,j,1] = imgData[index+1]
+            cvImg[imgRes[1] -1 - i,j,0] = imgData[index+2]
+            index = index + 3
+    return cvImg
+
+def GrabImageFromCam():
+    siError, imgResolution, imgData = vrep.simxGetVisionSensorImage(siID, iCamera, 0, vrep.simx_opmode_streaming )
+    if( siError != vrep.simx_return_ok ) and (siError != vrep.simx_return_novalue_flag):
+        print('GrabImageFromCam() : ERREUR --> appel a simxGetVisionSensorImage() 1')
+        print('                     code d erreur COPPELIA = ' + str(siError))
+        return [], -1
+    time.sleep(0.1)
+    siError, imgResolution, imgData = vrep.simxGetVisionSensorImage(siID, iCamera, 0, vrep.simx_opmode_buffer )
+    if( siError != vrep.simx_return_ok ) and (siError != vrep.simx_return_novalue_flag):
+        print('GrabImageFromCam() : ERREUR --> appel a simxGetVisionSensorImage() 2')
+        print('                     code d erreur COPPELIA = ' + str(siError))
+        return [], -1
+    # Appel du "Wrapper" pour convertir au format
+    # RGB OpenCV : 
+    cvImg = COP2CV2ImageWrapper(imgResolution, imgData)
+    # fini
+    return cvImg, 0
+
+
+def Map_vers_Cylindres(PosInit) :
+    ''' Retourne la liste des cylindres avec le bon format et avec pour cylindre numero 0 la position initiale du Robo'''
+    DataMap = np.loadtxt(r'C:\Users\julie\Documents\Ecole\IMT Nord Europe\M1\Challenge Robotique\Challenge\donnees-map.txt', dtype=float)
+    #affichage des donnees de la carte
+    x=DataMap[:,0]
+    y=DataMap[:,1]
+    t=DataMap[:,2]
+    Liste_Cylindres = [[0,PosInit,0,10000000]]  #Pt_i = [i,[Xi, Yi], Mi, Ri]
+    for i in range(len(DataMap)):
+        Pt_i = [i+1,[DataMap[i][0],DataMap[i][1]]]
+        if DataMap[i][2] == 1:
+            Pt_i.append(10)
+            Pt_i.append(250)
+            Pt_i.append(1)
+        elif DataMap[i][2] == 2:
+            Pt_i.append(30)
+            Pt_i.append(600)
+            Pt_i.append(2)
+        elif DataMap[i][2] == 3:
+            Pt_i.append(50)
+            Pt_i.append(1500)
+            Pt_i.append(3)
+        else :
+            return ("Probleme dans DataMap...")
+        Liste_Cylindres.append(Pt_i)
+    return(Liste_Cylindres)
+
+
 
 def Plot_Cylindres(c, edges):
     ''' Plot les cylindres à leurs coordonnées '''
@@ -280,7 +266,6 @@ def ConstructGraph(cylindres, R=0.5):
     g.vs["masse"] = [str(cyl[2]) for cyl in cylindres]
     g.vs["gain"] = [str(cyl[3]) for cyl in cylindres]
     poids = [] 
-
     for cyl1 in cylindres:
         # print(str(cyl1))
         for cyl2 in cylindres:
@@ -298,7 +283,8 @@ def ConstructGraph(cylindres, R=0.5):
                         dte = droite(cyl1[1],cyl2[1])
                         distance = distancePD(cyl3[1], dte)
                         # print("\t\t\t\tdroite : " + str(dte) + " | distance : " + str(distance))
-                        if distance < distancePP(cyl1[1],cyl2[1])/4:
+                        h = distancePP(cyl1[1],cyl2[1])/4
+                        if distance < h:
                             b = False
                             # print("\t\t\t\tedge NOK")
                     i += 1
@@ -367,30 +353,110 @@ def shortest_path(adj_matrix):
     print('path: {0}, length: {1}'.format(shortest, path_len(shortest)))
     return (shortest, path_len(shortest))
 
-def del_cyl(cylindres, n=5):
-    ''' Supprime les 5 cylindres les moins retables, ayants les rapports Masse/Gain les plus élevés. '''
-    rev = cylindres[::-1]
-    dlt = rev[n:]
-    return dlt[::-1]
+def angle_turn(Pos_Cylindre, Pos_Robo, Orientation_Robo):
+    ''' Retourne la valeur de l'angle entre le Robo et le cylindre vise'''
+    # Pos_Cylindre = [Xc, Yc]
+    # Pos_Robo = [Xr, Yr]
+    # Orientation_Robo = angle autour de Z entre - pi et pi
+    vecteur_ecart = [Pos_Cylindre[0]-Pos_Robo[0],Pos_Cylindre[1]-Pos_Robo[1]]
+    vecteur_orientation = [math.cos(Orientation_Robo), math.sin(Orientation_Robo)]
+    prod_scalaire = (float)(vecteur_ecart[0]*vecteur_orientation[0] + vecteur_ecart[1] * vecteur_orientation[1])
+    norme_ecart = math.sqrt(vecteur_ecart[0]**2 + vecteur_ecart[1]**2)
+    return(math.acos(prod_scalaire/norme_ecart))
 
+def Go(speed):
+    '''
+    Immobilisation du Robot au départ de la simu. 
+    '''
+    siError = vrep.simxSetJointTargetVelocity(siID, iLeftMotor, speed, vrep.simx_opmode_blocking)
+    if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
+        print('Turn() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
+        print('code d erreur V-REP = ' + str(siError))
+        return(-1)
+    siError = vrep.simxSetJointTargetVelocity(siID, iRightMotor, speed, vrep.simx_opmode_blocking)
+    if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
+        print('Turn() : ERREUR ---> appel a simxSetJointTargetVelocity() [droite]')
+        print('code d erreur V-REP = ' +  str(siError))
+        return(-2)
+    print("Robot en marche !")
+    return(0)
 
+def DEG2RAD(x):
+  y = MON_PI * ( x / 180.0)
+  return( y )
 
+def RAD2DEG(x):
+  y = 180.0 * ( x / MON_PI )
+  return( y )
 
-
-
-
-
-
-
-
-
-
+def Go_To_Cylindre(Tab_Cyl ,num):
+    seuil = DEG2RAD(15)
+    seuil_centre = DEG2RAD(5)
+    Pos_Cyl = Tab_Cyl[num][1]
+    ret, Pos_Rob, Ori_Rob = GetMobileBasePosition()
+    if ret >= 0:
+        while distancePP(Pos_Rob, Pos_Cyl) > 1.05 : # robot pas dans cylindre + delta
+            ret, Pos_Rob, Ori_Rob = GetMobileBasePosition()
+            print("Cyl : ",Pos_Cyl)
+            if ret >= 0:
+                ang = angle_turn(Pos_Cyl, Pos_Rob, Ori_Rob)
+                if ang > seuil:
+                    while ang > seuil_centre:
+                        time.sleep(0.2)
+                        print("Left")
+                        print(RAD2DEG(ang))
+                        siError = vrep.simxSetJointTargetVelocity(siID, iRightMotor, 3.0, vrep.simx_opmode_blocking)
+                        if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
+                            print('main() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
+                            print('code d erreur COPPELIA = ' + str(siError))
+                            vrep.simxFinish(siID)
+                            exit()
+                        siError = vrep.simxSetJointTargetVelocity(siID, iLeftMotor, 0.0, vrep.simx_opmode_blocking)
+                        if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
+                            print('main() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
+                            print('code d erreur COPPELIA = ' + str(siError))
+                            vrep.simxFinish(siID)
+                            exit()
+                        ret, Pos_Rob, Ori_Rob = GetMobileBasePosition()
+                        if ret >= 0:
+                            ang = angle_turn(Pos_Cyl, Pos_Rob, Ori_Rob)
+                elif ang < -seuil:
+                    while ang < -seuil_centre:
+                        time.sleep(0.2)
+                        print("Right")
+                        siError = vrep.simxSetJointTargetVelocity(siID, iLeftMotor, 3.0, vrep.simx_opmode_blocking)
+                        if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
+                            print('main() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
+                            print('code d erreur COPPELIA = ' + str(siError))
+                            vrep.simxFinish(siID)
+                            exit()
+                        siError = vrep.simxSetJointTargetVelocity(siID, iRightMotor, 0.0, vrep.simx_opmode_blocking)
+                        if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
+                            print('main() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
+                            print('code d erreur COPPELIA = ' + str(siError))
+                            vrep.simxFinish(siID)
+                            exit()
+                        ret, Pos_Rob, Ori_Rob = GetMobileBasePosition()
+                        if ret >= 0:
+                            ang = angle_turn(Pos_Cyl, Pos_Rob, Ori_Rob)
+                else:
+                    # Tout droit
+                    time.sleep(0.2)
+                    if Go(5.0) < 0:
+                        print("ERREUR : main() ---> appel a Go() : Erreur pour un des moteurs")
+                        vrep.simxFinish(siID)
+                        exit()
+        if Set_Immobile() < 0:
+            print("6")
+            print("ERREUR : main() ---> appel a Set_Immobile() : Erreur pour un des moteurs")
+            vrep.simxFinish(siID)
+            exit()
 
 
 ###########################################################################################################################################################
 # INIT
 ###########################################################################################################################################################
-'''
+
 #.........................................
 # tentative de connexion au serveur V-REP 
 #.........................................
@@ -426,7 +492,13 @@ time.sleep(0.1)
 #.........................................
 # Initialisation de la camera
 #.........................................
-
+# print("Initialisation du systeme de vision...")
+# if InitVisionSystem() < 0:
+#     print("ERREUR : main() ---> appel a InitVisionSystem() : echec de l'initialisation...")
+#     vrep.simxFinish(siID)
+#     exit()
+# print("OK")
+# time.sleep(0.1) 
 
 
 #.........................................
@@ -434,47 +506,49 @@ time.sleep(0.1)
 #.........................................
 
 
-'''
+
 ###########################################################################################################################################################
 # PROGRAMME
 ###########################################################################################################################################################
 
-import random
-def Test_Cylindres(n=20):
-    ''' Les cylindres sont classé par rentabilités : rapport Masse/Gain '''
-    cylindres = []
-    for i in range(n):
-        x, y = round(random.randint(0,100)/10,2), round(random.randint(0,100)/10,2)
-        M = random.randint(25,100)
-        R = round(M*0.2*random.randint(1,10)*0.1,2)
-        cyl = [i, [x,y], M, R]
-        cylindres.append(cyl)
-    cylindres = sorted(cylindres, key=lambda a: a[2]/a[3])
-    i = 0
-    for cyl in cylindres:
-        cyl[0] = i
-        i += 1
-    return cylindres
+# .........................................
+# Creation du graphe 
+# .........................................
 
-c = Test_Cylindres()
+ret, PosInit, OriInit = GetMobileBasePosition()
+
+Tab_Cylindres = Map_vers_Cylindres(PosInit)
 # c = [[0, [7.7, 8.7], 98, 15.68], [1, [2.8, 5.4], 97, 13.58], [2, [5.3, 6.5], 63, 8.82], [3, [3.6, 1.1], 46, 5.52], [4, [5.4, 6.9], 75, 12]]
 # c = del_cyl(c)
 # print(c)
 
-graph, adj_matrix = ConstructGraph(c[:15])
-Plot_Cylindres(c, graph.get_edgelist())
-# print(adj_matrix)
-path, length = shortest_path(adj_matrix)
-print("Affichage en cours")
-Afficher_Graphe(graph)
+# graph, adj_matrix = ConstructGraph(c[:15])
+# Plot_Cylindres(c, graph.get_edgelist())
+# # print(adj_matrix)
+# path, length = shortest_path(adj_matrix)
+# print("Affichage en cours")
+# Afficher_Graphe(graph)
+
+print("je pars")
+Go_To_Cylindre(Tab_Cylindres,9)
+
+# #.........................................
+# # Recuperation du frame de la camera 
+# #.........................................
+# for i in range(50):
+#     while True:
+#         cvImg, ret = GrabImageFromCam()
+#         time.sleep(0.1)
+#         if ret >= 0:
+#             break
+#     # affichage
+#     cv2.imshow('CAMERA',cvImg)
+#     cv2.waitKey(2)
 
 
 
 
 
-
-
-'''
 ###########################################################################################################################################################
 # DECONNECTION DU SERVEUR
 ###########################################################################################################################################################
@@ -484,4 +558,3 @@ print("deconnexion du serveur COPPELIA...")
 vrep.simxFinish(siID)
 print("OK")
 
-'''

@@ -46,9 +46,14 @@ ENTRAXE = 0.2
 WHEEL_RADIUS = 0.1                                             
 
 Vmax0 = 1           # Vitesse max a vide
-coef_a = 1/600      # Pondaration Masse-Vitesse
+Masse_Robot = 0     # Masse du robot à vide
+coef_a = 600      # Pondaration Masse-Vitesse
 coef_ac = 7.41e-5   # Pondaration Masse-Carburant
 coef_bc = 1/15      # Consommation a vide
+
+Cylindres_collectes = []
+Recompense_collectes = 0
+Q_carbu = 10
 
 ###########################################################################################################################################################
 # FONCTIONS
@@ -185,7 +190,7 @@ def Map_vers_Cylindres(PosInit) :
     x=DataMap[:,0]
     y=DataMap[:,1]
     t=DataMap[:,2]
-    Liste_Cylindres = [[0,PosInit,0,10000000]]  #Pt_i = [i,[Xi, Yi], Mi, Ri]
+    Liste_Cylindres = [[0,PosInit,0,10000000]]  #Pt_i = [i,[Xi, Yi], Mi, Ri, type]
     for i in range(len(DataMap)):
         Pt_i = [i+1,[DataMap[i][0],DataMap[i][1]]]
         if DataMap[i][2] == 1:
@@ -205,8 +210,6 @@ def Map_vers_Cylindres(PosInit) :
         Liste_Cylindres.append(Pt_i)
     return(Liste_Cylindres)
 
-
-
 def Plot_Cylindres(c, edges):
     ''' Plot les cylindres à leurs coordonnées '''
     X = [cyl[1][0] for cyl in c]
@@ -221,12 +224,12 @@ def Plot_Cylindres(c, edges):
         x_values = [point1[0], point2[0]]
         y_values = [point1[1], point2[1]]
         plt.plot(x_values, y_values, 'bo', linestyle="-")
-    # plt.show()
+    plt.show(block=False)
 
 def distancePP(A,B):
     return math.sqrt((A[0]-B[0])**2 + (A[1]-B[1])**2)
 
-def Poids_i_vers_j(Pt_i, Pt_j, ponderationTps=1.0, ponderationCarbu=1.0):
+def Poids_i_vers_j(Pt_i, Pt_j, ponderationTps=17/21*1000, ponderationCarbu=12/21*1000):
     ''' Retourne le poids du graphe vu du dessus entre le cylindre i et le cylindre j'''
     'Pt_i = [i,[Xi, Yi], Mi, Ri]'
     Mi = Pt_i[2]
@@ -236,7 +239,7 @@ def Poids_i_vers_j(Pt_i, Pt_j, ponderationTps=1.0, ponderationCarbu=1.0):
     dist = distancePP(Pt_i[1],Pt_j[1])
     Cout_i_vers_j = ponderationTps * dist / Vmax0*(1-math.exp(-coef_a*Mi)) + ponderationCarbu * (coef_ac * Mi + coef_bc) * dist
     Gain_i_vers_j = Rj
-    return round((Cout_i_vers_j / Gain_i_vers_j),2)
+    return Cout_i_vers_j / Gain_i_vers_j
 
 def droite(A,B):
     '''
@@ -254,13 +257,14 @@ def distancePD(Pnt,Drte):
     (m,p) = Drte
     return abs((-m*xP+yP-p)/(math.sqrt((-m)**2+1)))
 
-def ConstructGraph(cylindres, R=0.5):
+def ConstructGraph(cylindres):
     '''
     Construit le graph correspondant aux différents cylindres \n
     nbre_cy = int | cylindres = [cyl1, cyl2, ...] \n
     cyl5 = [5, [x,y], M, R]
     '''
     nbre_cyl = len(cylindres)
+    # print(nbre_cyl)
     g = ig.Graph(n=nbre_cyl, directed=True)
     g.vs["num"] = [str(cyl[0]) for cyl in cylindres]
     g.vs["masse"] = [str(cyl[2]) for cyl in cylindres]
@@ -283,7 +287,8 @@ def ConstructGraph(cylindres, R=0.5):
                         dte = droite(cyl1[1],cyl2[1])
                         distance = distancePD(cyl3[1], dte)
                         # print("\t\t\t\tdroite : " + str(dte) + " | distance : " + str(distance))
-                        h = distancePP(cyl1[1],cyl2[1])/4
+                        # h = distancePP(cyl1[1],cyl2[1])/4
+                        h = 0.9
                         if distance < h:
                             b = False
                             # print("\t\t\t\tedge NOK")
@@ -318,7 +323,7 @@ def Afficher_Graphe(grph):
     fig, ax = plt.subplots()
     ig.plot(grph, target=ax, autocurved=False, **visual_style)
     fig.tight_layout()
-    plt.show()
+    plt.show(block=False)
 
 def shortest_path(adj_matrix):
     ''' Retourne le chemin le plus court parcourant tout les noeuds du graphe '''
@@ -358,15 +363,37 @@ def angle_turn(Pos_Cylindre, Pos_Robo, Orientation_Robo):
     # Pos_Cylindre = [Xc, Yc]
     # Pos_Robo = [Xr, Yr]
     # Orientation_Robo = angle autour de Z entre - pi et pi
-    vecteur_ecart = [Pos_Cylindre[0]-Pos_Robo[0],Pos_Cylindre[1]-Pos_Robo[1]]
     vecteur_orientation = [math.cos(Orientation_Robo), math.sin(Orientation_Robo)]
-    prod_scalaire = (float)(vecteur_ecart[0]*vecteur_orientation[0] + vecteur_ecart[1] * vecteur_orientation[1])
-    norme_ecart = round(math.sqrt(vecteur_ecart[0]**2 + vecteur_ecart[1]**2),2)
-    print("vecteur ecart : ",vecteur_ecart)
-    print("vecteur ori : ",vecteur_orientation)
-    print("prod scalaire : ",prod_scalaire)
-    print("norme ecart : ",norme_ecart)
-    return(math.acos(prod_scalaire/norme_ecart))
+    vecteur_ecart = [Pos_Cylindre[0]-Pos_Robo[0],Pos_Cylindre[1]-Pos_Robo[1]]
+    prod_scalaire = (float)(vecteur_ecart[0]*vecteur_orientation[0] + vecteur_ecart[1]*vecteur_orientation[1])
+    norme_orientation = math.sqrt(vecteur_orientation[0]**2 + vecteur_orientation[1]**2)
+    norme_ecart = math.sqrt(vecteur_ecart[0]**2 + vecteur_ecart[1]**2)
+    cos_theta = prod_scalaire/(norme_ecart*norme_orientation)
+    ang_rad = math.acos(cos_theta)
+
+    # print("vecteur ecart : ",vecteur_ecart)
+    # print("vecteur ori : ",vecteur_orientation)
+    # print("prod scalaire : ",prod_scalaire)
+    # print("norme ori : ",norme_orientation)
+    # print("norme ecart : ",norme_ecart)
+    # print("cos_theta : ", cos_theta)
+
+    A = Pos_Robo
+    B = [Pos_Robo[0]+vecteur_orientation[0], Pos_Robo[1]+vecteur_orientation[1]]
+    m, p = droite(A,B)
+
+    # print("ang : ", RAD2DEG(ang_rad))
+    if Pos_Cylindre[1] < m*Pos_Cylindre[0]+p : #--> Sous la droite
+        if (Orientation_Robo > -MON_PI/2 and Orientation_Robo < MON_PI/2) :  # Aller à droite
+            return -round(ang_rad,3)
+        else:
+            return round(ang_rad,3)
+    else :
+        if (Orientation_Robo > -MON_PI/2 and Orientation_Robo < MON_PI/2) :  # Aller à droite
+            return round(ang_rad,3)
+        else:
+            return -round(ang_rad,3)
+    
 
 def Go(speed):
     '''
@@ -382,11 +409,11 @@ def Go(speed):
         print('Go() : ERREUR ---> appel a simxSetJointTargetVelocity() [droite]')
         print('code d erreur V-REP = ' +  str(siError))
         return(-2)
-    print("Robot en marche !")
+    # print("Robot en marche !")
     return(0)
 
-def Left():
-    siError = vrep.simxSetJointTargetVelocity(siID, iRightMotor, 1.0, vrep.simx_opmode_blocking)
+def Left(v=1.0):
+    siError = vrep.simxSetJointTargetVelocity(siID, iRightMotor, v, vrep.simx_opmode_blocking)
     if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
         print('main() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
         print('code d erreur COPPELIA = ' + str(siError))
@@ -399,8 +426,8 @@ def Left():
         vrep.simxFinish(siID)
         exit()
 
-def Right():
-    siError = vrep.simxSetJointTargetVelocity(siID, iLeftMotor, 1.0, vrep.simx_opmode_blocking)
+def Right(v=1.0):
+    siError = vrep.simxSetJointTargetVelocity(siID, iLeftMotor, v, vrep.simx_opmode_blocking)
     if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
         print('main() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
         print('code d erreur COPPELIA = ' + str(siError))
@@ -421,7 +448,7 @@ def RAD2DEG(x):
   y = 180.0 * ( x / MON_PI )
   return( y )
 
-def Go_To_Cylindre(Tab_Cyl ,num):
+def Go_To_Cylindre(Tab_Cyl ,num, speed):
     seuil = DEG2RAD(15)
     seuil_centre = DEG2RAD(5)
     Pos_Cyl = Tab_Cyl[num][1]
@@ -431,39 +458,39 @@ def Go_To_Cylindre(Tab_Cyl ,num):
             ret, Pos_Rob, Ori_Rob = GetMobileBasePosition()
             if ret >= 0:
                 ang = angle_turn(Pos_Cyl, Pos_Rob, Ori_Rob)
-                print("Dist : ",distancePP(Pos_Rob, Pos_Cyl))
-                if ang < -seuil:
-                    while ang < -seuil_centre:
+                # print("Dist : ",distancePP(Pos_Rob, Pos_Cyl))
+                if ang > seuil:
+                    while ang > seuil_centre:
                         time.sleep(0.2)
-                        print("Left")
+                        # print("Left")
                         Left()
                         ret, Pos_Rob, Ori_Rob = GetMobileBasePosition()
                         if ret >= 0:
                             ang = angle_turn(Pos_Cyl, Pos_Rob, Ori_Rob)
-                            print("ang : ",RAD2DEG(ang))
-                            print("ori : ", Ori_Rob)
-                elif ang > seuil:
-                    while ang > seuil_centre:
+                            # print("ang : ",RAD2DEG(ang))
+                            # print("ori : ", Ori_Rob)
+                elif ang < -seuil:
+                    while ang < -seuil_centre:
                         time.sleep(0.2)
-                        print("Right")
+                        # print("Right")
                         Right()
                         ret, Pos_Rob, Ori_Rob = GetMobileBasePosition()
                         if ret >= 0:
                             ang = angle_turn(Pos_Cyl, Pos_Rob, Ori_Rob)
-                            print("ang : ",RAD2DEG(ang))
-                            print("ori : ", Ori_Rob)
+                            # print("ang : ",RAD2DEG(ang))
+                            # print("ori : ", Ori_Rob)
                 else:
                     # Tout droit
                     time.sleep(0.2)
-                    if Go(5.0) < 0:
+                    if Go(speed) < 0:
                         print("ERREUR : main() ---> appel a Go() : Erreur pour un des moteurs")
                         vrep.simxFinish(siID)
                         exit()
                     ret, Pos_Rob, Ori_Rob = GetMobileBasePosition()
                     if ret >= 0:
                         ang = angle_turn(Pos_Cyl, Pos_Rob, Ori_Rob)
-                        print("ang : ",RAD2DEG(ang))
-                        print("ori : ", Ori_Rob)
+                        # print("ang : ",RAD2DEG(ang))
+                        # print("ori : ", Ori_Rob)
             else:
                 if Set_Immobile() < 0:
                     print("ERREUR : main() ---> appel a Set_Immobile() : Erreur pour un des moteurs")
@@ -534,49 +561,89 @@ if ret < 0:
 
 Tab_Cylindres = Map_vers_Cylindres(PosInit)
 
-###########################################################################################################################################################
-# PROGRAMME
-###########################################################################################################################################################
-
 # .........................................
 # Creation du graphe 
 # .........................................
 
+# graph, adj_matrix = ConstructGraph(Tab_Cylindres)
 
-# c = [[0, [7.7, 8.7], 98, 15.68], [1, [2.8, 5.4], 97, 13.58], [2, [5.3, 6.5], 63, 8.82], [3, [3.6, 1.1], 46, 5.52], [4, [5.4, 6.9], 75, 12]]
-# c = del_cyl(c)
-# print(c)
-
-# graph, adj_matrix = ConstructGraph(c[:15])
-# Plot_Cylindres(c, graph.get_edgelist())
-# # print(adj_matrix)
-# path, length = shortest_path(adj_matrix)
+#path, length = shortest_path(adj_matrix)
+path = [0, 5, 9, 10, 6, 11, 14, 15, 13, 17, 18, 19, 20, 16, 12, 8, 4, 7, 3, 2, 1, 0]
+length = 23.101041452457935
 # print("Affichage en cours")
+# Plot_Cylindres(Tab_Cylindres, graph.get_edgelist())
 # Afficher_Graphe(graph)
+
+# .........................................
+# Calcul évolution temps et conso
+# .........................................
+
+MasseTab = [0]
+Masse = 0
+DistanceTab = [0]
+Distance = 0
+VTab = [Vmax0]
+QTab = [10]
+Q = Q_carbu
+TpsTab = [0]
+T0 = 0
+
+for i in range(1,len(path)-1):
+    MasseTab.append(round(Masse + Tab_Cylindres[i][2],3))
+    Masse += Tab_Cylindres[i][2]
+
+    DistanceTab.append(round(Distance + distancePP(Tab_Cylindres[i-1][1], Tab_Cylindres[i][1]),3))
+    Distance += distancePP(Tab_Cylindres[i-1][1], Tab_Cylindres[i][1])
+
+    VTab.append(round(Vmax0*(1-math.exp(1-coef_a/MasseTab[i])),3))
+
+    QTab.append(round(Q - (coef_ac*MasseTab[i-1] + coef_bc)*(distancePP(Tab_Cylindres[i-1][1], Tab_Cylindres[i][1])),3))
+    Q -= (coef_ac*MasseTab[i] + coef_bc)*(distancePP(Tab_Cylindres[i-1][1], Tab_Cylindres[i][1]))
+
+    TpsTab.append(round(T0 + DistanceTab[i]/VTab[i-1],3))
+    T0 += DistanceTab[i]/VTab[i-1]
+
+print("Masse : ", MasseTab)
+print("Distance : ", DistanceTab)
+print("Consommation : ", QTab)
+print("Vitesse : ", VTab)
+print("Temps : ", TpsTab)
+
+
+###########################################################################################################################################################
+# PROGRAMME
+###########################################################################################################################################################
+
 
 # .........................................
 # Navigation
 # .........................................
-# cy = [8,3]
-# ro = [4,1]
-# o = 45
-# ang = angle_turn(cy,ro,o)
-# print('angle rad = ',ang)
-# print("angle deg : ", RAD2DEG(ang))
-print("je pars")
-Go_To_Cylindre(Tab_Cylindres,2)
-# Go(3.0)
-# time.sleep(5)
-# Set_Immobile()
-# time.sleep(1)
-# Left()
-# time.sleep(4)
-# Set_Immobile()
-# time.sleep(0.5)
-# Right()
-# time.sleep(4)
-Set_Immobile()
+'''
+Vitesse = Vmax0
 
+
+start_time = time.time()
+
+print("je pars")
+
+for i in path:
+    Vitesse = Vmax0*(1-math.exp(-coef_a*Masse_Robot))
+    T = time.time() - start_time
+    if (i != 0 and Vitesse > 0):
+        speed = 5.0
+        Go_To_Cylindre(Tab_Cylindres, i, speed)
+        Set_Immobile()
+        time.sleep(2)
+        Q_carbu = Q_carbu - (coef_ac*Masse_Robot + coef_bc)*(distancePP(Tab_Cylindres[i-1], Tab_Cylindres[i]))
+        print(f"Q_carbu : {Q_carbu} | Temps : {T}")
+        if (T < 600 and Q_carbu > 0):
+            Cylindres_collectes.append(i)
+            Masse_Robot += Tab_Cylindres[i][2]
+            Recompense_collectes += Tab_Cylindres[i][3]
+        else :
+            break
+
+print("Recompense collectee : ", Recompense_collectes)    
 
 # #.........................................
 # # Recuperation du frame de la camera 
@@ -594,7 +661,7 @@ Set_Immobile()
 
 
 
-
+'''
 ###########################################################################################################################################################
 # DECONNECTION DU SERVEUR
 ###########################################################################################################################################################

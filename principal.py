@@ -190,7 +190,7 @@ def Map_vers_Cylindres(PosInit) :
     x=DataMap[:,0]
     y=DataMap[:,1]
     t=DataMap[:,2]
-    Liste_Cylindres = [[0,PosInit,0,10000000]]  #Pt_i = [i,[Xi, Yi], Mi, Ri, type]
+    Liste_Cylindres = [[0,PosInit,0,10000000,0]]  #Pt_i = [i,[Xi, Yi], Mi, Ri, type]
     for i in range(len(DataMap)):
         Pt_i = [i+1,[DataMap[i][0],DataMap[i][1]]]
         if DataMap[i][2] == 1:
@@ -210,12 +210,22 @@ def Map_vers_Cylindres(PosInit) :
         Liste_Cylindres.append(Pt_i)
     return(Liste_Cylindres)
 
-def Plot_Cylindres(c, edges):
-    ''' Plot les cylindres à leurs coordonnées '''
+def Plot_Cylindres(c, edges, path):
+    ''' Plot le graphe dans matplotlib '''
     X = [cyl[1][0] for cyl in c]
     Y = [cyl[1][1] for cyl in c]
     N = [str(cyl[0]) for cyl in c]
-    plt.scatter(X,Y)
+    P = [elt for elt in zip(path,path[1:])]
+    for cyl in c:
+        match cyl[4]:
+            case 0:
+                plt.scatter(cyl[1][0],cyl[1][1], s=200.0, c='black')
+            case 1:
+                plt.scatter(cyl[1][0],cyl[1][1], s=200.0, c='red')
+            case 2:
+                plt.scatter(cyl[1][0],cyl[1][1], s=200.0, c='green')
+            case 3:
+                plt.scatter(cyl[1][0],cyl[1][1], s=200.0, c='blue')
     for i, txt in enumerate(N):
         plt.annotate(txt, (X[i], Y[i]), weight='bold', size=16)
     for (p1,p2) in edges:
@@ -223,24 +233,30 @@ def Plot_Cylindres(c, edges):
         point2 = c[p2][1]
         x_values = [point1[0], point2[0]]
         y_values = [point1[1], point2[1]]
-        plt.plot(x_values, y_values, 'bo', linestyle="-")
-    plt.show(block=False)
+        if (p1,p2) in P[:len(P)-1]:
+            plt.plot(x_values,y_values, linewidth='4', color='black', linestyle='-')
+        else:            
+            plt.plot(x_values, y_values, linewidth='0.5', color='grey', linestyle='dotted')
+    plt.savefig(r'C:\Users\julie\Documents\Ecole\IMT Nord Europe\M1\Challenge Robotique\Challenge\graphe.png', bbox_inches='tight')
 
 def distancePP(A,B):
+    '''Calcul la distance entre entre A[x,y] et B[x,y]'''
     return math.sqrt((A[0]-B[0])**2 + (A[1]-B[1])**2)
 
-def Poids_i_vers_j(Pt_i, Pt_j, ponderationTps=17/21*1000, ponderationCarbu=12/21*1000):
+def Poids_i_vers_j(Pt_i, Pt_j, ponderationTps=10*1000, ponderationCarbu=1*1000):
     ''' Retourne le poids du graphe vu du dessus entre le cylindre i et le cylindre j'''
-    'Pt_i = [i,[Xi, Yi], Mi, Ri]'
-    Mi = Pt_i[2]
-    Mj = Pt_j[2]
-    Rj = Pt_j[3]
-    # dist = math.sqrt((Pt_i[1][0]-Pt_j[1][0])**2 + (Pt_i[1][1]-Pt_j[1][1])**2)
-    dist = distancePP(Pt_i[1],Pt_j[1])
-    Cout_i_vers_j = ponderationTps * dist / Vmax0*(1-math.exp(-coef_a*Mi)) + ponderationCarbu * (coef_ac * Mi + coef_bc) * dist
-    Gain_i_vers_j = Rj
-    return Cout_i_vers_j / Gain_i_vers_j
-
+    if Pt_j[0] != 0:    
+        Mi = Pt_i[2]
+        Mj = Pt_j[2]
+        Rj = Pt_j[3]
+        # dist = math.sqrt((Pt_i[1][0]-Pt_j[1][0])**2 + (Pt_i[1][1]-Pt_j[1][1])**2)
+        dist = distancePP(Pt_i[1],Pt_j[1])
+        Cout_i_vers_j = ponderationTps * dist / Vmax0*(1-math.exp(-coef_a*Mi)) + ponderationCarbu * (coef_ac * Mi + coef_bc) * dist
+        Gain_i_vers_j = Rj
+        return Cout_i_vers_j / Gain_i_vers_j
+    else: 
+        return 0.0
+    
 def droite(A,B):
     '''
     Renvoie les coefficients de la droite passant par A et B
@@ -261,7 +277,7 @@ def ConstructGraph(cylindres):
     '''
     Construit le graph correspondant aux différents cylindres \n
     nbre_cy = int | cylindres = [cyl1, cyl2, ...] \n
-    cyl5 = [5, [x,y], M, R]
+    cyl5 = [5, [x,y], M, R, type]
     '''
     nbre_cyl = len(cylindres)
     # print(nbre_cyl)
@@ -305,6 +321,7 @@ def ConstructGraph(cylindres):
     return g, A
 
 def Afficher_Graphe(grph):
+    ''' Affiche le graphe donne en parametre'''
     label = []
     for i in range(int(grph.vcount())):
         chaine = grph.vs[i]["num"] #+ " , " + grph.vs[i]["masse"] + " , " + grph.vs[i]["gain"]
@@ -323,13 +340,21 @@ def Afficher_Graphe(grph):
     fig, ax = plt.subplots()
     ig.plot(grph, target=ax, autocurved=False, **visual_style)
     fig.tight_layout()
-    plt.show(block=False)
+    plt.show()
 
 def shortest_path(adj_matrix):
     ''' Retourne le chemin le plus court parcourant tout les noeuds du graphe '''
     # Helper function to calculate path length
     def path_len(path):
-        return sum(adj_matrix[i][j] for i, j in zip(path, path[1:]))
+        poids = 0
+        Masse = 0
+        Gain = 0
+        for i in range(1,len(path)):
+            dist = distancePP(Tab_Cylindres[path[i-1]][1],Tab_Cylindres[path[i]][1])
+            poids += 3000 * dist / Vmax0*(1-math.exp(-coef_a*Masse)) + 1000 * (coef_ac * Masse + coef_bc) * dist
+            Masse += Tab_Cylindres[path[i]][2]
+            Gain += Tab_Cylindres[path[i]][3]
+        return poids/Gain
 
     # Set of all nodes to visit
     to_visit = set(range(len(adj_matrix)))
@@ -352,14 +377,51 @@ def shortest_path(adj_matrix):
                     next_state[new_pos] = new_path
 
         state = next_state
-
     # Find the shortest path from possible candidates
     shortest = min((path + [0] for path in state.values()), key=path_len)
     print('path: {0}, length: {1}'.format(shortest, path_len(shortest)))
-    return (shortest, path_len(shortest))
+    return (shortest) #, path_len(shortest))
+
+def find_path(points):
+    # Fonction pour trouver le chemin optimal
+    n = len(points)
+    visited = [False] * n
+    visited[0] = True
+    path = [0]
+    q = 10 # quantité de carburant initiale
+    mass = 0 # masse totale initiale
+    t = 0 # temps total écoulé
+    Vmax0 = 1.0
+    for i in range(n - 1):
+        next_point = None
+        min_time = float("inf")
+        for j in range(n):
+            if not visited[j]:
+                coord = points[j][1]
+                m = points[j][2]
+                d = distancePP(points[path[-1]][1], coord)
+                # Calcul de la consommation de carburant pour aller de path[-1] à j
+                fuel_consumed = (7.41e-5 * mass + 7.41e-5) * d
+                if q - fuel_consumed >= 0:
+                    time = int(math.ceil(d / (Vmax0*(1 - math.exp(-600 / (mass + m))))))
+                    if t + time <= 600 and time < min_time:
+                        min_time = time
+                        next_point = j
+                        q -= fuel_consumed
+                        mass += m
+        if next_point is None:
+            break
+        visited[next_point] = True
+        path.append(next_point)
+        t += min_time
+    reward = 0
+    for i in path:
+        if i!=0:
+            reward += points[i][3]
+    return path, reward
 
 def angle_turn(Pos_Cylindre, Pos_Robo, Orientation_Robo):
-    ''' Retourne la valeur de l'angle entre le Robo et le cylindre vise'''
+    ''' Retourne la valeur de l'angle entre le Robot et le cylindre vise'''
     # Pos_Cylindre = [Xc, Yc]
     # Pos_Robo = [Xr, Yr]
     # Orientation_Robo = angle autour de Z entre - pi et pi
@@ -412,28 +474,34 @@ def Go(speed):
     # print("Robot en marche !")
     return(0)
 
-def Left(v=1.0):
+def Left(v=3.0):
+    '''
+    Aller à gauche
+    '''
     siError = vrep.simxSetJointTargetVelocity(siID, iRightMotor, v, vrep.simx_opmode_blocking)
     if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
         print('main() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
         print('code d erreur COPPELIA = ' + str(siError))
         vrep.simxFinish(siID)
         exit()
-    siError = vrep.simxSetJointTargetVelocity(siID, iLeftMotor, 0.0, vrep.simx_opmode_blocking)
+    siError = vrep.simxSetJointTargetVelocity(siID, iLeftMotor, v/3, vrep.simx_opmode_blocking)
     if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
         print('main() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
         print('code d erreur COPPELIA = ' + str(siError))
         vrep.simxFinish(siID)
         exit()
 
-def Right(v=1.0):
+def Right(v=3.0):
+    '''
+    Aller à droite
+    '''
     siError = vrep.simxSetJointTargetVelocity(siID, iLeftMotor, v, vrep.simx_opmode_blocking)
     if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
         print('main() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
         print('code d erreur COPPELIA = ' + str(siError))
         vrep.simxFinish(siID)
         exit()
-    siError = vrep.simxSetJointTargetVelocity(siID, iRightMotor, 0.0, vrep.simx_opmode_blocking)
+    siError = vrep.simxSetJointTargetVelocity(siID, iRightMotor, v/3, vrep.simx_opmode_blocking)
     if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
         print('main() : ERREUR ---> appel a simxSetJointTargetVelocity() [gauche]')
         print('code d erreur COPPELIA = ' + str(siError))
@@ -454,13 +522,13 @@ def Go_To_Cylindre(Tab_Cyl ,num, speed):
     Pos_Cyl = Tab_Cyl[num][1]
     ret, Pos_Rob, Ori_Rob = GetMobileBasePosition()
     if ret >= 0:
-        while distancePP(Pos_Rob, Pos_Cyl) > 1.05 : # robot pas dans cylindre + delta
+        while distancePP(Pos_Rob, Pos_Cyl) > 1.5 : # robot pas dans cylindre + delta
             ret, Pos_Rob, Ori_Rob = GetMobileBasePosition()
             if ret >= 0:
                 ang = angle_turn(Pos_Cyl, Pos_Rob, Ori_Rob)
                 # print("Dist : ",distancePP(Pos_Rob, Pos_Cyl))
                 if ang > seuil:
-                    while ang > seuil_centre:
+                    while ang > seuil_centre and distancePP(Pos_Rob, Pos_Cyl) > 1.2:
                         time.sleep(0.2)
                         # print("Left")
                         Left()
@@ -469,7 +537,7 @@ def Go_To_Cylindre(Tab_Cyl ,num, speed):
                             ang = angle_turn(Pos_Cyl, Pos_Rob, Ori_Rob)
                             # print("ang : ",RAD2DEG(ang))
                             # print("ori : ", Ori_Rob)
-                elif ang < -seuil:
+                elif ang < -seuil and distancePP(Pos_Rob, Pos_Cyl) > 1.05:
                     while ang < -seuil_centre:
                         time.sleep(0.2)
                         # print("Right")
@@ -502,172 +570,183 @@ def Go_To_Cylindre(Tab_Cyl ,num, speed):
             exit()
 
 
-###########################################################################################################################################################
-# INIT
-###########################################################################################################################################################
+if __name__=="__main__":
 
-#.........................................
-# tentative de connexion au serveur V-REP 
-#.........................................
-argc = len(sys.argv)
-if( argc == 1 ):
-    szServerAddr = DEFAULT_IP
-else:
-    szServerAddr = sys.argv[1]
-vrep.simxFinish(-1)
-time.sleep(0.1)
-siID = vrep.simxStart(szServerAddr, VREP_PORT, 1, 1, 10000, 50)
-if( siID < 0):
-  print('ERREUR : main() ---> appel a simxStart() : impossible de se connecter a ' +  sys.argv[1])
-  print('         valeur de retour = ' + str(siID))
-  exit()
-print("Connexion au serveur COPPELIA fonctionnant sur " + szServerAddr + "etablie...")
+    ###########################################################################################################################################################
+    # INIT
+    ###########################################################################################################################################################
 
-#.........................................
-# Initialisation des Handles
-#.........................................
-if InitAllHandles() < 0:
-    print("ERREUR : main() ---> appel a InitAllHandles() : un des handles est indisponible")
+
+    #.........................................
+    # tentative de connexion au serveur V-REP 
+    #.........................................
+    argc = len(sys.argv)
+    if( argc == 1 ):
+        szServerAddr = DEFAULT_IP
+    else:
+        szServerAddr = sys.argv[1]
+    vrep.simxFinish(-1)
+    time.sleep(0.1)
+    siID = vrep.simxStart(szServerAddr, VREP_PORT, 1, 1, 10000, 50)
+    if( siID < 0):
+        print('ERREUR : main() ---> appel a simxStart() : impossible de se connecter a ' +  sys.argv[1])
+        print('         valeur de retour = ' + str(siID))
+        exit()
+    print("Connexion au serveur COPPELIA fonctionnant sur " + szServerAddr + " etablie...")
+
+    #.........................................
+    # Initialisation des Handles
+    #.........................................
+    if InitAllHandles() < 0:
+        print("ERREUR : main() ---> appel a InitAllHandles() : un des handles est indisponible")
+        vrep.simxFinish(siID)
+        exit()
+
+    time.sleep(0.1)
+
+    #.........................................
+    # Initialisation de la camera
+    #.........................................
+    # print("Initialisation du systeme de vision...")
+    # if InitVisionSystem() < 0:
+    #     print("ERREUR : main() ---> appel a InitVisionSystem() : echec de l'initialisation...")
+    #     vrep.simxFinish(siID)
+    #     exit()
+    # print("OK")
+    # time.sleep(0.1) 
+
+
+    #.........................................
+    # Récuperation des cylindres et de la position du robot
+    #.........................................
+
+    ret, PosInit, OriInit = GetMobileBasePosition()
+    if ret < 0:
+        print("Erreur récupération pose robot")
+        exit()
+
+    Tab_Cylindres = Map_vers_Cylindres(PosInit)
+
+    # .........................................
+    # Choix du meilleur chemin
+    # .........................................
+
+    graph, adj_matrix = ConstructGraph(Tab_Cylindres)
+
+    # path = shortest_path(adj_matrix)
+    path, reward = find_path(Tab_Cylindres)
+    
+    # path = [0, 5, 9, 10, 6, 11, 14, 15, 13, 17, 18, 19, 20, 16, 12, 8, 4, 7, 3, 2, 1, 0]
+    # path = [0, 17, 13, 10, 6, 11, 7, 3, 2, 1, 5, 9, 14, 15, 18, 19, 20, 16, 12, 8, 4, 0]      #--> shortest_path() avec les anciens poids
+    # path = [0, 2, 7, 3, 4, 8, 12, 16, 20, 19, 18, 17, 13, 14, 15, 11, 6, 10, 9, 5, 1, 0]      #--> shortest_path()
+    # path = [0, 1, 5, 9, 10, 6, 11, 7, 3, 4, 8, 12, 16, 20, 19]                                #--> find_path()
+    
+    # .........................................
+    # Calcul évolution Masse, Distance, Vitesse, Temps, Conso et Recompenses
+    # .........................................
+
+    MasseTab = [0]
+    Masse = 0
+    DistanceTab = [0]
+    Distance = 0
+    VTab = [Vmax0]
+    QTab = [10]
+    Q = Q_carbu
+    TpsTab = [0]
+    T0 = 0
+    RecTab = [0]
+    Rec = 0
+
+    for i in range(1,len(path)-1):
+        MasseTab.append(round(Masse + Tab_Cylindres[path[i]][2],3))
+        Masse += Tab_Cylindres[path[i]][2]
+
+        DistanceTab.append(round(Distance + distancePP(Tab_Cylindres[path[i-1]][1], Tab_Cylindres[path[i]][1]),3))
+        Distance += distancePP(Tab_Cylindres[path[i-1]][1], Tab_Cylindres[path[i]][1])
+
+        VTab.append(round(Vmax0*(1-math.exp(1-coef_a/MasseTab[i])),3))
+
+        QTab.append(round(Q - (coef_ac*MasseTab[i-1] + coef_bc)*(distancePP(Tab_Cylindres[path[i-1]][1], Tab_Cylindres[path[i]][1])),3))
+        Q -= (coef_ac*MasseTab[i-1] + coef_bc)*(distancePP(Tab_Cylindres[path[i-1]][1], Tab_Cylindres[path[i]][1]))
+
+        TpsTab.append(round(T0 + DistanceTab[i]/VTab[i-1],3))
+        T0 += DistanceTab[i]/VTab[i-1]
+
+        RecTab.append(Rec + Tab_Cylindres[path[i]][3])
+        Rec += Tab_Cylindres[path[i]][3]
+
+    print("Masse : ", MasseTab)
+    print("Distance : ", DistanceTab)
+    print("Consommation : ", QTab)
+    print("Vitesse : ", VTab)
+    print("Temps : ", TpsTab)
+    print("Recompense : ",RecTab)
+
+    print("\npath : ", path)
+
+    print("\nAffichage en cours")
+    Plot_Cylindres(Tab_Cylindres, graph.get_edgelist(), path)
+    # Afficher_Graphe(graph)
+
+    ###########################################################################################################################################################
+    # PROGRAMME
+    ###########################################################################################################################################################
+
+
+    # .........................................
+    # Navigation
+    # .........................................
+
+    print("\nRobot en Marche !")
+
+    start_time = time.time()
+    T=0
+    Vitesse = Vmax0
+    old_cyl = 0
+    for i in path:
+        if (i != 0 and Vitesse > 0):
+            print("Go vers ",i)
+            Go_To_Cylindre(Tab_Cylindres, i, Vitesse*10)
+            time.sleep(1)
+            Q_carbu = Q_carbu - (coef_ac*Masse_Robot + coef_bc)*(distancePP(Tab_Cylindres[old_cyl][1], Tab_Cylindres[i][1]))
+            if (T < 600 and Q_carbu > 0):
+                Cylindres_collectes.append(i)
+                Masse_Robot += Tab_Cylindres[i][2]
+                Vitesse = Vmax0*(1-math.exp(1-coef_a/Masse_Robot))
+                Recompense_collectes += Tab_Cylindres[i][3]
+                T = time.time() - start_time
+                print(f"Vitesse : {Vitesse} | Masse : {Masse_Robot} | Q_carbu : {round(Q_carbu,3)} | Temps : {round(T,2)} | Recompense : {Recompense_collectes}")
+                old_cyl = i
+            else :
+                T = time.time() - start_time
+                print(f"Q_carbu : {round(Q_carbu,3)} | Temps : {round(T,2)} | Recompense : {Recompense_collectes}")
+                break
+
+    print("Temps total : ", time.time()-start_time)
+    print("\nRecompense collectee : ", Recompense_collectes)    
+
+    # #.........................................
+    # # Recuperation du frame de la camera 
+    # #.........................................
+    # for i in range(50):
+    #     while True:
+    #         cvImg, ret = GrabImageFromCam()
+    #         time.sleep(0.1)
+    #         if ret >= 0:
+    #             break
+    #     # affichage
+    #     cv2.imshow('CAMERA',cvImg)
+    #     cv2.waitKey(2)
+
+
+
+
+    ###########################################################################################################################################################
+    # DECONNECTION DU SERVEUR
+    ###########################################################################################################################################################
+
+    time.sleep(1)
+    print("\nDeconnexion du serveur COPPELIA...")
     vrep.simxFinish(siID)
-    exit()
-
-if Set_Immobile() < 0:
-    print("ERREUR : main() ---> appel a Set_Immobile() : Erreur pour un des moteurs")
-    vrep.simxFinish(siID)
-    exit()
-
-time.sleep(0.1)
-
-#.........................................
-# Initialisation de la camera
-#.........................................
-# print("Initialisation du systeme de vision...")
-# if InitVisionSystem() < 0:
-#     print("ERREUR : main() ---> appel a InitVisionSystem() : echec de l'initialisation...")
-#     vrep.simxFinish(siID)
-#     exit()
-# print("OK")
-# time.sleep(0.1) 
-
-
-#.........................................
-# Récuperation des cylindres et de la position du robot
-#.........................................
-
-ret, PosInit, OriInit = GetMobileBasePosition()
-if ret < 0:
-    print("Erreur récupération pose robot")
-    exit()
-
-Tab_Cylindres = Map_vers_Cylindres(PosInit)
-
-# .........................................
-# Creation du graphe 
-# .........................................
-
-# graph, adj_matrix = ConstructGraph(Tab_Cylindres)
-
-#path, length = shortest_path(adj_matrix)
-path = [0, 5, 9, 10, 6, 11, 14, 15, 13, 17, 18, 19, 20, 16, 12, 8, 4, 7, 3, 2, 1, 0]
-length = 23.101041452457935
-# print("Affichage en cours")
-# Plot_Cylindres(Tab_Cylindres, graph.get_edgelist())
-# Afficher_Graphe(graph)
-
-# .........................................
-# Calcul évolution temps et conso
-# .........................................
-
-MasseTab = [0]
-Masse = 0
-DistanceTab = [0]
-Distance = 0
-VTab = [Vmax0]
-QTab = [10]
-Q = Q_carbu
-TpsTab = [0]
-T0 = 0
-
-for i in range(1,len(path)-1):
-    MasseTab.append(round(Masse + Tab_Cylindres[i][2],3))
-    Masse += Tab_Cylindres[i][2]
-
-    DistanceTab.append(round(Distance + distancePP(Tab_Cylindres[i-1][1], Tab_Cylindres[i][1]),3))
-    Distance += distancePP(Tab_Cylindres[i-1][1], Tab_Cylindres[i][1])
-
-    VTab.append(round(Vmax0*(1-math.exp(1-coef_a/MasseTab[i])),3))
-
-    QTab.append(round(Q - (coef_ac*MasseTab[i-1] + coef_bc)*(distancePP(Tab_Cylindres[i-1][1], Tab_Cylindres[i][1])),3))
-    Q -= (coef_ac*MasseTab[i] + coef_bc)*(distancePP(Tab_Cylindres[i-1][1], Tab_Cylindres[i][1]))
-
-    TpsTab.append(round(T0 + DistanceTab[i]/VTab[i-1],3))
-    T0 += DistanceTab[i]/VTab[i-1]
-
-print("Masse : ", MasseTab)
-print("Distance : ", DistanceTab)
-print("Consommation : ", QTab)
-print("Vitesse : ", VTab)
-print("Temps : ", TpsTab)
-
-
-###########################################################################################################################################################
-# PROGRAMME
-###########################################################################################################################################################
-
-
-# .........................................
-# Navigation
-# .........................................
-'''
-Vitesse = Vmax0
-
-
-start_time = time.time()
-
-print("je pars")
-
-for i in path:
-    Vitesse = Vmax0*(1-math.exp(-coef_a*Masse_Robot))
-    T = time.time() - start_time
-    if (i != 0 and Vitesse > 0):
-        speed = 5.0
-        Go_To_Cylindre(Tab_Cylindres, i, speed)
-        Set_Immobile()
-        time.sleep(2)
-        Q_carbu = Q_carbu - (coef_ac*Masse_Robot + coef_bc)*(distancePP(Tab_Cylindres[i-1], Tab_Cylindres[i]))
-        print(f"Q_carbu : {Q_carbu} | Temps : {T}")
-        if (T < 600 and Q_carbu > 0):
-            Cylindres_collectes.append(i)
-            Masse_Robot += Tab_Cylindres[i][2]
-            Recompense_collectes += Tab_Cylindres[i][3]
-        else :
-            break
-
-print("Recompense collectee : ", Recompense_collectes)    
-
-# #.........................................
-# # Recuperation du frame de la camera 
-# #.........................................
-# for i in range(50):
-#     while True:
-#         cvImg, ret = GrabImageFromCam()
-#         time.sleep(0.1)
-#         if ret >= 0:
-#             break
-#     # affichage
-#     cv2.imshow('CAMERA',cvImg)
-#     cv2.waitKey(2)
-
-
-
-
-'''
-###########################################################################################################################################################
-# DECONNECTION DU SERVEUR
-###########################################################################################################################################################
-
-time.sleep(1)
-print("deconnexion du serveur COPPELIA...")
-vrep.simxFinish(siID)
-print("OK")
+    print("OK")
 

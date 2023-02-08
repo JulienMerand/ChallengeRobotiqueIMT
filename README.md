@@ -6,5 +6,3 @@ Le principe de l'exercice est d'optimiser la récompense finale d'un robot qui p
 A chaque fois que le robot passe par un point, sa masse totale augmente de la masse liée à ce point et vaut donc Masse_Tot. La vitesse du robot entre deux points est de (1-exp(-600 / Masse_Tot).
 Le robot part avec une quantité de Q=10L de carburant, qu'il consomme au fur et à mesure, en fonction de Masse_Tot et de la distance parcourue (dist) entre les points, selon cette fonction Q=Q-(7.41e-5*Masse_Tot + 7.41e-5)*dist.
 Il faut donc veiller à optimiser le chemin pour que le robot amasse le plus de récompenses en moins de 600 secondes tout en gardant du carburant.
-
-Peux-tu créer un programme python qui prend en entrée la liste des points visitables, avec leur indice, leurs coordonnées, leur masse et leur récompense et retourne la liste des indices des points à visiter, dans l'ordre ?

@@ -401,7 +401,7 @@ def find_path(points):
                 m = points[j][2]
                 d = distancePP(points[path[-1]][1], coord)
                 # Calcul de la consommation de carburant pour aller de path[-1] à j
-                fuel_consumed = (7.41e-5 * mass + 7.41e-5) * d
+                fuel_consumed = (coef_ac * mass + coef_bc) * d
                 if q - fuel_consumed >= 0:
                     time = int(math.ceil(d / (Vmax0*(1 - math.exp(-600 / (mass + m))))))
                     if t + time <= 600 and time < min_time:
@@ -432,18 +432,9 @@ def angle_turn(Pos_Cylindre, Pos_Robo, Orientation_Robo):
     norme_ecart = math.sqrt(vecteur_ecart[0]**2 + vecteur_ecart[1]**2)
     cos_theta = prod_scalaire/(norme_ecart*norme_orientation)
     ang_rad = math.acos(cos_theta)
-
-    # print("vecteur ecart : ",vecteur_ecart)
-    # print("vecteur ori : ",vecteur_orientation)
-    # print("prod scalaire : ",prod_scalaire)
-    # print("norme ori : ",norme_orientation)
-    # print("norme ecart : ",norme_ecart)
-    # print("cos_theta : ", cos_theta)
-
     A = Pos_Robo
     B = [Pos_Robo[0]+vecteur_orientation[0], Pos_Robo[1]+vecteur_orientation[1]]
     m, p = droite(A,B)
-
     # print("ang : ", RAD2DEG(ang_rad))
     if Pos_Cylindre[1] < m*Pos_Cylindre[0]+p : #--> Sous la droite
         if (Orientation_Robo > -MON_PI/2 and Orientation_Robo < MON_PI/2) :  # Aller à droite
@@ -459,7 +450,7 @@ def angle_turn(Pos_Cylindre, Pos_Robo, Orientation_Robo):
 
 def Go(speed):
     '''
-    Immobilisation du Robot au départ de la simu. 
+    Le robot ve tout droit à la vitesse donnée en paramètre
     '''
     siError = vrep.simxSetJointTargetVelocity(siID, iLeftMotor, speed, vrep.simx_opmode_blocking)
     if ((siError != vrep.simx_return_ok) and (siError != vrep.simx_return_novalue_flag)):
@@ -517,6 +508,7 @@ def RAD2DEG(x):
   return( y )
 
 def Go_To_Cylindre(Tab_Cyl ,num, speed):
+    ''' Aller vers le cylindre demandé, à la vitesse demandé '''
     seuil = DEG2RAD(15)
     seuil_centre = DEG2RAD(5)
     Pos_Cyl = Tab_Cyl[num][1]
@@ -632,14 +624,12 @@ if __name__=="__main__":
     # .........................................
 
     graph, adj_matrix = ConstructGraph(Tab_Cylindres)
-
     # path = shortest_path(adj_matrix)
-    path, reward = find_path(Tab_Cylindres)
+
+    # path, reward = find_path(Tab_Cylindres)
     
-    # path = [0, 5, 9, 10, 6, 11, 14, 15, 13, 17, 18, 19, 20, 16, 12, 8, 4, 7, 3, 2, 1, 0]
-    # path = [0, 17, 13, 10, 6, 11, 7, 3, 2, 1, 5, 9, 14, 15, 18, 19, 20, 16, 12, 8, 4, 0]      #--> shortest_path() avec les anciens poids
     # path = [0, 2, 7, 3, 4, 8, 12, 16, 20, 19, 18, 17, 13, 14, 15, 11, 6, 10, 9, 5, 1, 0]      #--> shortest_path()
-    # path = [0, 1, 5, 9, 10, 6, 11, 7, 3, 4, 8, 12, 16, 20, 19]                                #--> find_path()
+    path = [0, 1, 5, 9, 10, 6, 11, 7, 3, 4, 8, 12, 16, 20, 19]                                  #--> find_path()
     
     # .........................................
     # Calcul évolution Masse, Distance, Vitesse, Temps, Conso et Recompenses
@@ -675,7 +665,7 @@ if __name__=="__main__":
         RecTab.append(Rec + Tab_Cylindres[path[i]][3])
         Rec += Tab_Cylindres[path[i]][3]
 
-    print("Masse : ", MasseTab)
+    print("\nMasse : ", MasseTab)
     print("Distance : ", DistanceTab)
     print("Consommation : ", QTab)
     print("Vitesse : ", VTab)

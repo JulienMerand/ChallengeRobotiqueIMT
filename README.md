@@ -1,6 +1,8 @@
 # Challenge Robotique 2023 - IMT Nord Europe
  Challenge réalisé du 30/01/23 au 03/02/23 par **Julien MÉRAND** et **Quentin DESMARTIN** dans le cadre de la semaine Challenge à l'école d'ingénieurs **IMT Nord Europe**.
 
+Vidéo de simulation : https://youtu.be/F4mHlCPkxX0
+
 ## Objectifs :
 
 Le principe de l'exercice est d'optimiser la récompense finale d'un robot qui passe par des points dont les coordonneés sont définis dans une liste. Le robot démarre d'une position 0. À chaque fois que le robot passe par un point, il empoche la récompense liée à ce point.

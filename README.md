@@ -7,4 +7,4 @@ A chaque fois que le robot passe par un point, sa masse totale augmente de la ma
 Le robot part avec une quantité de Q=10L de carburant, qu'il consomme au fur et à mesure, en fonction de Masse_Tot et de la distance parcourue (dist) entre les points, selon cette fonction Q=Q-(7.41e-5*Masse_Tot + 7.41e-5)*dist.
 Il faut donc veiller à optimiser le chemin pour que le robot amasse le plus de récompenses en moins de 600 secondes tout en gardant du carburant.
 
-![Graph](graph.png)
+![Graph](graphe.png)
